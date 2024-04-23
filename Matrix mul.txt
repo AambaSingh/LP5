@@ -1,0 +1,95 @@
+!nvcc --version
+%env OMP_NUM_THREADS=3
+
+--------------------------------------------------
+
+%%writefile mul.cu
+#include <cuda_runtime.h>
+#include <iostream>
+
+__global__ void matmul(int* A, int* B, int* C, int N) {
+    int Row = blockIdx.y*blockDim.y+threadIdx.y;
+    int Col = blockIdx.x*blockDim.x+threadIdx.x;
+    if (Row < N && Col < N)
+    {
+        int Pvalue = 0;
+        for (int k = 0; k < N; k++)
+        {
+            Pvalue += A[Row*N+k] * B[k*N+Col];
+        }
+        C[Row*N+Col] = Pvalue;
+    }
+}
+
+int main() {
+    int N;
+    std::cout << "Enter the size of the matrices (N x N): ";
+    std::cin >> N;
+
+    int size = N * N * sizeof(int);
+    int* A, * B, * C;
+    int* dev_A, * dev_B, * dev_C;
+    cudaMallocHost(&A, size);
+    cudaMallocHost(&B, size);
+    cudaMallocHost(&C, size);
+    cudaMalloc(&dev_A, size);
+    cudaMalloc(&dev_B, size);
+    cudaMalloc(&dev_C, size);
+
+    // Input matrix A
+    std::cout << "Enter the elements of matrix A:" << std::endl;
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cin >> A[i*N+j];
+        }
+    }
+
+    // Input matrix B
+    std::cout << "Enter the elements of matrix B:" << std::endl;
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cin >> B[i*N+j];
+        }
+    }
+
+    cudaMemcpy(dev_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_B, B, size, cudaMemcpyHostToDevice);
+
+    dim3 dimBlock(16, 16);
+    dim3 dimGrid((N + dimBlock.x - 1) / dimBlock.x, (N + dimBlock.y - 1) / dimBlock.y);
+
+    matmul<<<dimGrid, dimBlock>>>(dev_A, dev_B, dev_C, N);
+
+    cudaMemcpy(C, dev_C, size, cudaMemcpyDeviceToHost);
+
+    // Print the result
+    std::cout << "Result:" << std::endl;
+    for (int i = 0; i < std::min(10, N); i++)
+    {
+        for (int j = 0; j < std::min(10, N); j++)
+        {
+            std::cout << C[i*N+j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Free memory
+    cudaFree(dev_A);
+    cudaFree(dev_B);
+    cudaFree(dev_C);
+    cudaFreeHost(A);
+    cudaFreeHost(B);
+    cudaFreeHost(C);
+
+    return 0;
+}
+
+
+----------------------------------------------------------------------------------------------------------
+
+
+!nvcc mul.cu -o mul
+
+----------------------------------------------------------------------------------------------
+
+!./mul

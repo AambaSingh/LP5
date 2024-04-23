@@ -1,0 +1,93 @@
+!nvcc --version
+%env OMP_NUM_THREADS=3
+
+-----------------------------------------------------------------------
+
+%%writefile add.cu
+
+#include <iostream>
+#include <cuda_runtime.h>
+
+using namespace std;
+
+__global__ void addVectors(int* A, int* B, int* C, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        C[i] = A[i] + B[i];
+    }
+}
+
+int main()
+{
+    int n;
+    cout << "Enter the size of the vectors: ";
+    cin >> n;
+
+    int* A, * B, * C;
+    int size = n * sizeof(int);
+
+    // Allocate memory on the host
+    cudaMallocHost(&A, size);
+    cudaMallocHost(&B, size);
+    cudaMallocHost(&C, size);
+
+    // Initialize vector A
+    cout << "Enter the elements of vector A:" << endl;
+    for (int i = 0; i < n; i++)
+    {
+        cin >> A[i];
+    }
+
+    // Initialize vector B
+    cout << "Enter the elements of vector B:" << endl;
+    for (int i = 0; i < n; i++)
+    {
+        cin >> B[i];
+    }
+
+    // Allocate memory on the device
+    int* dev_A, * dev_B, * dev_C;
+    cudaMalloc(&dev_A, size);
+    cudaMalloc(&dev_B, size);
+    cudaMalloc(&dev_C, size);
+
+    // Copy data from host to device
+    cudaMemcpy(dev_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_B, B, size, cudaMemcpyHostToDevice);
+
+    // Launch the kernel
+    int blockSize = 256;
+    int numBlocks = (n + blockSize - 1) / blockSize;
+    addVectors<<<numBlocks, blockSize>>>(dev_A, dev_B, dev_C, n);
+
+    // Copy data from device to host
+    cudaMemcpy(C, dev_C, size, cudaMemcpyDeviceToHost);
+
+    // Print the results
+    cout << "Results:" << endl;
+    for (int i = 0; i < n; i++) // Ensure only printing valid results
+    {
+        cout << C[i] << " ";
+    }
+    cout << endl;
+
+    // Free memory
+    cudaFree(dev_A);
+    cudaFree(dev_B);
+    cudaFree(dev_C);
+    cudaFreeHost(A);
+    cudaFreeHost(B);
+    cudaFreeHost(C);
+
+    return 0;
+}
+
+----------------------------------------------------------------------------------------------------------
+
+!nvcc add.cu -o add
+
+---------------------------------------------------------------------------------------------------------
+
+!./add
